@@ -10,6 +10,18 @@ struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
+uint64 
+nproc(void){
+  uint64 count=0;
+  struct proc* p;
+  printf("\n");
+  for (p = proc; p < &proc[NPROC]; p++) {
+    if (p->state != UNUSED)
+      count++;
+  }
+  return count;
+}
+
 struct proc *initproc;
 
 int nextpid = 1;
@@ -282,6 +294,9 @@ fork(void)
 
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
+
+  // Copy the trace mask to the child from the parent
+  np->tracemask = p->tracemask;
 
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
