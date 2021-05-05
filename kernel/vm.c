@@ -88,6 +88,35 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
   return &pagetable[PX(0, va)];
 }
 
+// (uint64)va: ext l2(9) l1(9) l0(9) offset
+// (uint65)pa: ppn(44) off(12)
+// (uint64)pte: ppn(44)  flags(10)
+// (uint64)pgtbl: -> pte0
+// (uint64)pgtbl[i]: ptei: ppn(44) flags(10)
+void 
+_pteprint__(pagetable_t pa, int level) 
+{
+  if(level>3)return;
+  for (int i = 0; i < 512; i++) {
+    pte_t pte = pa[i];
+    if (!(PTE_V & pte))
+      continue;
+    pagetable_t next_pa = (pagetable_t)PTE2PA(pte);
+    // point to real pa memory
+    printf("..");
+    for(int j = 1;j<level;j++)printf(" ..");
+    printf("%d: pte %p pa %p\n", i, pte, next_pa);
+    _pteprint__(next_pa, level+1);
+  }
+}
+void 
+vmprint(pagetable_t pgtbl) 
+{
+  // root pgtbl pa
+  printf("page table 0x%p\n", pgtbl);
+  _pteprint__(pgtbl, 1);
+}
+
 // Look up a virtual address, return the physical address,
 // or 0 if not mapped.
 // Can only be used to look up user pages.
