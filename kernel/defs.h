@@ -92,6 +92,7 @@ int             fork(void);
 int             growproc(int);
 pagetable_t     proc_pagetable(struct proc *);
 void            proc_freepagetable(pagetable_t, uint64);
+void            proc_freekpagetable(pagetable_t, uint64,uint64);
 int             kill(int);
 struct cpu*     mycpu(void);
 struct cpu*     getmycpu(void);
@@ -157,11 +158,20 @@ void            uartputc(int);
 void            uartputc_sync(int);
 int             uartgetc(void);
 
+//vmcopyin.c // lab: pgtbl
+int             copyin_new(pagetable_t , char *, uint64, uint64 );
+int             copyinstr_new(pagetable_t, char *, uint64, uint64);
+
 // vm.c
+int             kvmmapuvm(pagetable_t uvm, pagetable_t kvm, uint64 start,uint64 sz);
+void            vmprint(pagetable_t);
 void            kvminit(void);
+pagetable_t     kvmcreate(void); // lab: pgtbl
 void            kvminithart(void);
 uint64          kvmpa(uint64);
 void            kvmmap(uint64, uint64, uint64, int);
+void            vmmap(pagetable_t,uint64, uint64, uint64, int);//lab: pgtbl
+
 int             mappages(pagetable_t, uint64, uint64, uint64, int);
 pagetable_t     uvmcreate(void);
 void            uvminit(pagetable_t, uchar *, uint);
@@ -172,6 +182,8 @@ uint64          uvmdealloc(pagetable_t, uint64, uint64);
 int             uvmcopy(pagetable_t, pagetable_t, uint64);
 #endif
 void            uvmfree(pagetable_t, uint64);
+void            kvmfree(pagetable_t);//lab: pgtbl
+
 void            uvmunmap(pagetable_t, uint64, uint64, int);
 void            uvmclear(pagetable_t, uint64);
 uint64          walkaddr(pagetable_t, uint64);

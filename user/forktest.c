@@ -24,8 +24,12 @@ forktest(void)
     pid = fork();
     if(pid < 0)
       break;
-    if(pid == 0)
+    if(pid == 0){
+      print("fork pid 0\n");
       exit(0);
+    }else{
+      print("fork pid n\n");
+    }
   }
 
   if(n == N){
