@@ -77,8 +77,23 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
+  if (which_dev == 2) {
+    int itv = myproc()->alarm_interval;
+    if (itv > 0) {
+      if (p->last_tick == p->alarm_interval) {
+        p->last_tick = 0;
+        if(p->alarm_trapframe==0){
+          p->alarm_trapframe = kalloc();
+          memmove(p->alarm_trapframe, p->trapframe,300);
+          p->trapframe->epc = (uint64)p->alarm_handler;
+        }
+      }else{
+        myproc()->last_tick++;
+      }
+    } else {
+      yield();
+    }
+  }
 
   usertrapret();
 }
@@ -112,12 +127,11 @@ usertrapret(void)
   // set S Previous Privilege mode to User.
   unsigned long x = r_sstatus();
   x &= ~SSTATUS_SPP; // clear SPP to 0 for user mode
-  x |= SSTATUS_SPIE; // enable interrupts in user mode
+  x |= SSTATUS_SPIE;  // enable interrupts in user mode
   w_sstatus(x);
 
   // set S Exception Program Counter to the saved user pc.
   w_sepc(p->trapframe->epc);
-
   // tell trampoline.S the user page table to switch to.
   uint64 satp = MAKE_SATP(p->pagetable);
 

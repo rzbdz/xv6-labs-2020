@@ -80,8 +80,11 @@ int             pipewrite(struct pipe*, uint64, int);
 void            printf(char*, ...);
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
+void            backtrace(void); // lab: traps
 
 // proc.c
+int             sigreturn();
+int             sigalarm(int, void(*)());
 int             cpuid(void);
 void            exit(int);
 int             fork(void);

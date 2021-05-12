@@ -21,6 +21,23 @@ static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
 
+//lab: traps
+int sigalarm(int interval, void(*handler)()){
+  struct proc* p = myproc();
+  p->alarm_handler = handler;
+  p->alarm_interval = interval;
+  p->last_tick = 0;
+  return 0;
+}
+//lab: traps
+int sigreturn(){
+  struct proc* p = myproc();
+  memmove(p->trapframe, p->alarm_trapframe, 300);
+  kfree(myproc()->alarm_trapframe);
+  p->alarm_trapframe = 0;
+  return 1;
+}
+
 // initialize the proc table at boot time.
 void
 procinit(void)
@@ -103,7 +120,11 @@ allocproc(void)
     }
   }
   return 0;
-
+  //lab: traps
+  p->alarm_handler = 0;
+  p->alarm_interval = 0;
+  p->last_tick = 0;
+  p->alarm_trapframe = 0;
 found:
   p->pid = allocpid();
 
@@ -138,7 +159,11 @@ freeproc(struct proc *p)
 {
   if(p->trapframe)
     kfree((void*)p->trapframe);
+  if(p->alarm_trapframe)
+    kfree((void*)p->alarm_trapframe);
   p->trapframe = 0;
+  //lab: traps
+  p->alarm_trapframe=0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
@@ -520,6 +545,8 @@ sched(void)
   swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
+ 
+
 
 // Give up the CPU for one scheduling round.
 void

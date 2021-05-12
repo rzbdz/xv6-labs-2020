@@ -17,6 +17,23 @@ sys_exit(void)
   return 0;  // not reached
 }
 
+//lab: traps
+uint64
+sys_sigalarm(void)
+{
+  int intv;
+  uint64 f;
+  if(argint(0, &intv)<0||argaddr(1, &f)<0)return -1;
+  return sigalarm(intv, (void(*))f);
+}
+
+//lab: traps
+uint64
+sys_sigreturn(void)
+{
+  return sigreturn();
+}
+
 uint64
 sys_getpid(void)
 {
@@ -57,7 +74,7 @@ sys_sleep(void)
 {
   int n;
   uint ticks0;
-
+  backtrace();
   if(argint(0, &n) < 0)
     return -1;
   acquire(&tickslock);
