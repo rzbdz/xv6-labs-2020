@@ -143,6 +143,7 @@ freeproc(struct proc *p)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
   p->sz = 0;
+  p->stackbase = 0;
   p->pid = 0;
   p->parent = 0;
   p->name[0] = 0;
@@ -250,6 +251,7 @@ growproc(int n)
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
+  
   return 0;
 }
 
@@ -274,7 +276,8 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
-
+  
+  np->stackbase = p->stackbase;
   np->parent = p;
 
   // copy saved user registers.

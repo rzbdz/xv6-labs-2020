@@ -49,8 +49,8 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
-  if(r_scause() == 8){
+  int scause = r_scause();
+  if(scause == 8){
     // system call
 
     if(p->killed)
@@ -67,6 +67,25 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  }else if(scause==13 || scause==15){
+    uint64 faultaddr = r_stval();
+    if (faultaddr >= p->sz || faultaddr < p->stackbase) {
+      p->killed = 1;
+      exit(-1);
+    }
+    uint64* mem = kalloc();
+    if (mem == 0) {
+      //panic("lazy allocation: no free memory");
+      p->killed = 1;
+      exit(-1);
+    }
+    memset(mem, 0, PGSIZE);
+    if (mappages(p->pagetable, PGROUNDDOWN(faultaddr), PGSIZE, (uint64)mem,
+                 PTE_W | PTE_X | PTE_R | PTE_U) != 0) {
+      kfree(mem);
+     // panic("lazy allocation: mappage fails");
+      p->killed = 1;
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

@@ -101,7 +101,7 @@ uartputc(int c)
     } else {
       uart_tx_buf[uart_tx_w] = c;
       uart_tx_w = (uart_tx_w + 1) % UART_TX_BUF_SIZE;
-      uartstart();
+      uartstart();//calls wake up
       release(&uart_tx_lock);
       return;
     }
