@@ -61,6 +61,7 @@ void            ramdiskintr(void);
 void            ramdiskrw(struct buf*);
 
 // kalloc.c
+int             memrefcnt(uint64 pa, int);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
@@ -146,7 +147,8 @@ void            trapinit(void);
 void            trapinithart(void);
 extern struct spinlock tickslock;
 void            usertrapret(void);
-
+pte_t *
+walk(pagetable_t pagetable, uint64 va, int alloc);
 // uart.c
 void            uartinit(void);
 void            uartintr(void);
@@ -155,7 +157,7 @@ void            uartputc_sync(int);
 int             uartgetc(void);
 
 // vm.c
-int             memrefcnt(uint64 pa, int);
+int             cowcopy(pagetable_t pagetable, uint64 va);
 void            kvminit(void);
 void            kvminithart(void);
 uint64          kvmpa(uint64);

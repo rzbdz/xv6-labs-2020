@@ -49,8 +49,12 @@ memrefcnt(uint64 pa, int incr){
   ret = (int)memref[INDEX(pa)];
   if(incr >0)
     memref[INDEX(pa)] += (uint8)incr;
-  else
+  else{
+    if(ret<=0){
+      panic("fcnt");
+    }
     memref[INDEX(pa)] --;
+  }
   release(&memreflock);
   return ret;
 }
