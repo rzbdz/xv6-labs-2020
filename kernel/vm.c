@@ -156,8 +156,8 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   for(;;){
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
-    if(*pte & PTE_V)
-      panic("remap");
+    // if(*pte & PTE_V)
+    //   panic("remap");
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
@@ -305,9 +305,11 @@ cowcopy(pagetable_t pagetable, uint64 va){
   // lab: cow
   va = PGROUNDDOWN(va);
   pte_t* pte = walk(pagetable, va, 0);
-  if((*pte&PTE_RSW)==0||(*pte&PTE_V)==0){
-    printf("fuck you\n");
+  if(pte==0 || (*pte&PTE_V)==0){
     return -1;
+  }
+  if((*pte&PTE_RSW)==0){
+    return -2;
   }
   uint64 pa = PTE2PA(*pte);
   uint64 flags = PTE_FLAGS(*pte);
@@ -319,8 +321,6 @@ cowcopy(pagetable_t pagetable, uint64 va){
   kfree((void*)pa);
   return 0;
 err:
-  printf("fuck you");
-  uvmunmap(pagetable, va, 1, 1);
   return -1;
 }
 
@@ -345,6 +345,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
+    *pte = PTE_COW(*pte);
     if(mappages(new, i, PGSIZE, (uint64)pa, PTE_COW(flags)) != 0){
       goto err;
     }
@@ -362,10 +363,9 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   return 0;
 
  err:
-  printf("Fuck ou\n");
-  uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
 }
+
 
 // mark a PTE invalid for user access.
 // used by exec for the user stack guard page.
@@ -390,6 +390,10 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+    if(va0 > MAXVA) return -1;
+    if((cowcopy(pagetable, va0))==-1){
+      return -1;
+    }
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
@@ -404,6 +408,8 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   }
   return 0;
 }
+
+
 
 // Copy from user to kernel.
 // Copy len bytes to dst from virtual address srcva in a given page table.
