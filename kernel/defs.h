@@ -9,6 +9,7 @@ struct sleeplock;
 struct stat;
 struct superblock;
 
+
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);
@@ -154,6 +155,7 @@ void            uartputc_sync(int);
 int             uartgetc(void);
 
 // vm.c
+int             memrefcnt(uint64 pa, int);
 void            kvminit(void);
 void            kvminithart(void);
 uint64          kvmpa(uint64);

@@ -23,11 +23,36 @@ struct {
   struct run *freelist;
 } kmem;
 
+// lab: cow
+uint8 memref[40000];
+struct spinlock memreflock;
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+
+  // lab: cow
+  initlock(&memreflock, "memref");
+  memset(memref, 1, 40000);
+
   freerange(end, (void*)PHYSTOP);
+}
+
+// lab: cow
+#define INDEX(pa) (((uint64)((char*)pa - end))/PGSIZE)
+
+int
+memrefcnt(uint64 pa, int incr){
+  int ret;
+  acquire(&memreflock);
+  ret = (int)memref[INDEX(pa)];
+  if(incr >0)
+    memref[INDEX(pa)] += (uint8)incr;
+  else
+    memref[INDEX(pa)] --;
+  release(&memreflock);
+  return ret;
 }
 
 void
@@ -46,6 +71,11 @@ freerange(void *pa_start, void *pa_end)
 void
 kfree(void *pa)
 {
+  // lab: cow
+  if((memrefcnt((uint64)pa, -1))>1){
+    return;
+  }
+
   struct run *r;
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
@@ -76,7 +106,9 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
+  if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
+    memrefcnt((uint64)r, 1);
+  }
   return (void*)r;
 }
