@@ -1,8 +1,0 @@
-Why are there missing keys with 2 threads, but not with 1 thread? 
-Identify a sequence of events with 2 threads that can lead to a key being missing. 
-Submit your sequence with a short explanation in answers-thread.txt
-
-let's say one thread trys to execute : e->key = key , meanwhile, another thread
-goes to e->value = value in another context. 
-and when inserting, the slot between e->next = n and *p = e may let other
-thread execute anoter *p = e, then the *p = e in the previous thread was ignored.
