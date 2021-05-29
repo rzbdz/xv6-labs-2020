@@ -322,6 +322,27 @@ sys_open(void)
     return -1;
   }
 
+  if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)){
+    int cyc = 0;
+    char tarpath[MAXPATH];
+    while(ip->type == T_SYMLINK){
+      if(cyc > 10){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+      cyc ++;
+      memset(tarpath, 0, sizeof(MAXPATH));
+      readi(ip, 0, (uint64)tarpath, 0, MAXPATH);
+      iunlockput(ip); // to next link ip
+      if((ip= namei(tarpath)) == 0){
+        end_op();
+        return -1;
+      }
+      ilock(ip);
+    }
+  }
+
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
@@ -329,6 +350,7 @@ sys_open(void)
     end_op();
     return -1;
   }
+
 
   if(ip->type == T_DEVICE){
     f->type = FD_DEVICE;
@@ -482,5 +504,28 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+// lab: fs
+uint64
+sys_symlink(void)
+{
+  char tarpath[MAXPATH], path[MAXPATH];
+  struct inode *symlink;
+
+  if(argstr(0, tarpath, MAXPATH)<0||argstr(1,path, MAXPATH) < 0){
+    return -1;
+  }
+  begin_op();
+  if(!(symlink=create(path, T_SYMLINK, 0, 0))){
+    end_op();
+    return -1;
+  }
+  if(!writei(symlink, 0, (uint64)tarpath, 0, MAXPATH)){
+    return -1;
+  }
+  iunlockput(symlink);
+  end_op();
   return 0;
 }

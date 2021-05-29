@@ -83,6 +83,7 @@ argstr(int n, char *buf, int max)
   return fetchstr(addr, buf, max);
 }
 
+extern uint64 sys_symlink(void);
 extern uint64 sys_chdir(void);
 extern uint64 sys_close(void);
 extern uint64 sys_dup(void);
@@ -106,6 +107,7 @@ extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 
 static uint64 (*syscalls[])(void) = {
+[SYS_symlink] sys_symlink,
 [SYS_fork]    sys_fork,
 [SYS_exit]    sys_exit,
 [SYS_wait]    sys_wait,

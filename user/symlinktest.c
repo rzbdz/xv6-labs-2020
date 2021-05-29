@@ -16,14 +16,6 @@ static void testsymlink(void);
 static void concur(void);
 static void cleanup(void);
 
-int
-main(int argc, char *argv[])
-{
-  cleanup();
-  testsymlink();
-  concur();
-  exit(failed);
-}
 
 static void
 cleanup(void)
@@ -185,4 +177,13 @@ concur(void)
     }
   }
   printf("test concurrent symlinks: ok\n");
+}
+
+int
+main(int argc, char *argv[])
+{
+  cleanup();
+  testsymlink();
+  concur();
+  exit(failed);
 }
