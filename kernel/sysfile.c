@@ -484,3 +484,26 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_mmap(void){
+  uint64 addr; uint64 length; int prot; int flags;int fd; int offset;
+  if((argaddr(0, &addr)<0)|
+     (argaddr(1, &length)<0)|
+     (argint(2,&prot)<0)|
+     (argint(3,&flags)<0)|
+     (argint(4, &fd)<0)|
+     (argint(5,&offset)<0)) goto dump;
+  return (uint64)mmap((void*)addr, length, prot, flags, fd, offset);
+dump:
+  return (uint64)((char*)(-1));
+}
+
+uint64
+sys_munmap(void){
+  uint64 addr; uint64 length;
+  if((argaddr(0, &addr)<0)|
+     (argaddr(1, &length)<0))
+    return 0xffffffffffffffff;
+  return (uint64)munmap((void*)addr, length);
+}

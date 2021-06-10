@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -131,6 +132,9 @@ found:
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
+  for(int i =0;i<MAXVMA;i++){
+    p->vmatable[i].addr = 0;
+  }
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
@@ -280,6 +284,32 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+  // copy vma
+  struct vma *v;
+  pte_t *npte, *opte;
+  for (int i = 0; i < MAXVMA; i++) {
+    v = &np->vmatable[i];
+    memmove(v, &p->vmatable[i], sizeof(struct vma));
+    if (!v->addr) {
+      continue;
+    }
+    v->f = filedup(v->f);   
+    for (int j = 0; j < v->length; j += PGSIZE) {
+      if ((npte = walk(np->pagetable, v->addr + j, 1)) == 0) {
+        panic("walk in fork");
+      }
+      if((opte = walk(p->pagetable, v->addr + j, 0))==0){
+        panic("walk in fork, par");
+      }
+      //if(v->flags & MAP_SHARED){   
+        //*npte = *opte;
+       // printf("pid: %d, share va: %p, pa:%p\n",p->pid,v->addr + j, PTE2PA(*npte));
+      //}
+      //else{
+        *npte = 0|PTE_V|PTE_M;
+      //}
+    }
+  }
   np->sz = p->sz;
 
   np->parent = p;
@@ -350,6 +380,12 @@ exit(int status)
       struct file *f = p->ofile[fd];
       fileclose(f);
       p->ofile[fd] = 0;
+    }
+  }
+  // remove all mapped mmap area
+  for(int v = 0;v<1;v++){
+    if((p->vmatable[v]).addr){
+      munmap((void*)(p->vmatable[v]).addr, (p->vmatable[v]).length);
     }
   }
 

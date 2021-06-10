@@ -2,6 +2,9 @@ struct stat;
 struct rtcdate;
 
 // system calls
+void *mmap(void *addr, uint64 length, int prot, int flags,
+                  int fd, int offset);
+int munmap(void *addr, int length);
 int fork(void);
 int exit(int) __attribute__((noreturn));
 int wait(int*);

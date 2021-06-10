@@ -5,15 +5,22 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
+#include "sleeplock.h"
+#include "file.h"
+#include "fcntl.h"
 
 /*
  * the kernel's page table.
  */
 pagetable_t kernel_pagetable;
 
+
 extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
+
 
 // Make a direct-map page table for the kernel.
 pagetable_t
@@ -139,7 +146,6 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 {
   uint64 a, last;
   pte_t *pte;
-
   a = PGROUNDDOWN(va);
   last = PGROUNDDOWN(va + size - 1);
   for(;;){
@@ -171,13 +177,18 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
-    if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
+    if((*pte & PTE_V) == 0){
+      continue;
+      //printf("not mapped va: %p\n", a);
+      //panic("uvmunmap: not mapped");
+    }
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
       uint64 pa = PTE2PA(*pte);
-      kfree((void*)pa);
+      if(pa!=0)
+        kfree((void*)pa);
+      //printf("do free pass\n");
     }
     *pte = 0;
   }
@@ -305,10 +316,18 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
-    if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+    if((*pte & PTE_V) == 0){
+      continue;
+      //panic("uvmcopy: page not present");
+    }    
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
+
+    if(flags&PTE_M){
+      //if(mappages(new, i, PGSIZE, (uint64)0, flags) != 0)
+      //  goto err;
+      continue;
+    }
     if((mem = kalloc()) == 0)
       goto err;
     memmove(mem, (char*)pa, PGSIZE);
@@ -428,4 +447,198 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+
+void printvma(struct proc* p){
+  printf("table of pid=%d\n\n", p->pid);
+  struct vma *v = p->vmatable;
+  for(int i = 0;i<16;i++){
+    printf("vma_%d, addr: %p, length: %p, f_inum: %p, off: %p\n", 
+    i, v->addr, v->length, (v->addr)?v->f->ip->inum:0, v->fileoff);
+    v++;
+  }
+  printf("table end\n\n");
+}
+
+
+// lab: mmap
+void *
+mmap(void *addr, uint64 length, int prot, int flags, int fd, int offset)
+{
+  struct proc* p = myproc();
+  pagetable_t pg = p->pagetable;
+  uint64 first_free = PGROUNDUP(p->sz);
+  pte_t *pte;
+  struct vma *v;
+  uint64 i = 0;
+  for (; i < length; i += PGSIZE) {
+    if ((pte = walk(pg, first_free + i, 1)) == 0) {
+      printf("walk\n");
+      goto dump;
+    }
+    if (*pte & PTE_V) {
+      printf("remap\n");
+      goto dump;
+    }
+    *pte = PTE_V|PTE_U|PTE_M;
+    p->sz += PGSIZE;
+  }
+  struct file* f = p->ofile[fd];
+  printf("mmap: fd: %d\n", fd);
+  if(f->readable == 0 && prot&PROT_READ){
+    printf("no readable f\n");
+    goto dump;
+  }
+  if(flags&MAP_SHARED && f->writable == 0 && prot&PROT_WRITE){
+    printf("no writable f\n");
+    goto dump;
+  }
+  
+  v = p->vmatable;
+  for(int i =0;i<MAXVMA;i++){
+    if(v->addr==0){
+      v->f = filedup(f);
+      v->length = length;
+      v->addr = first_free;
+      v->prot = prot;
+      v->flags = flags;
+      v->fileoff = offset;
+      return (void*)first_free;
+    }
+    v++;
+  }
+  printf("no slot for vma\n");
+dump:
+  return (char*)-1;
+}
+
+int 
+mmapapage(uint64 addr){
+  struct proc* p = myproc();
+  //printvma(p);
+  pagetable_t pg = p->pagetable;
+  pte_t *pte;
+  struct inode* ip = 0;
+  addr = PGROUNDDOWN(addr);
+  if((pte = walk(pg, addr, 0))==0 ||((*pte) & PTE_M )==0){
+    goto bad;
+  }
+  uint64 vma_low, vma_high, dst;
+  uint map_file_off;
+  struct vma *v = p->vmatable;
+  for(int i =0;i<MAXVMA;i++){
+    vma_low = v->addr;
+    if(vma_low==0){
+      v++;
+      continue;
+    }
+    vma_high = vma_low + v->length;
+    if(vma_low <= addr && vma_high>addr){
+      map_file_off = addr - vma_low;
+      ip = v->f->ip;
+      ilock(ip);
+      if((dst = (uint64)kalloc())==0){
+        printf("mmap: kalloc\n");
+        goto bad;
+      }
+      memset((void*)dst,0,PGSIZE);
+      //printf("pid %d, addr: %p, pa: %p\n", p->pid, addr, dst);
+      *pte = PA2PTE(dst)|PTE_U|PTE_V|PTE_M|PROT2FLAG(v->prot);
+      if(readi(ip, 0, dst, map_file_off, (uint)PGSIZE)==0){
+        goto bad;
+      }
+      iunlock(ip);
+      return 0;
+    }
+    v++;
+  }
+  printf("mmap: not found addr %p in vma\n", addr);
+bad:
+  if(ip){
+    iunlock(ip);
+  }
+  return -1;
+}
+
+int 
+munmap(void* addr, int length) 
+{
+  uint64 low = PGROUNDDOWN((uint64)addr);
+  uint64 high = PGROUNDUP((uint64)addr + length);
+  int n = high - low;
+  struct proc* p = myproc();
+  pagetable_t pg = p->pagetable;
+  struct inode* ip = 0;
+  uint64 vma_low, vma_high;
+  uint map_file_off;
+  struct vma* v = p->vmatable;
+  for (int i = 0; i < MAXVMA; i++) {
+    //printf("test inf loop\n");
+    vma_low = v->addr;
+    if (vma_low == 0) {
+      v++;
+      continue;
+    }
+    vma_high = vma_low + v->length;
+    if ((uint64)addr < vma_low || (uint64)addr >= vma_high) {
+      v++;
+      continue;
+    }
+    int r, ret = 0;
+    if (v->flags & MAP_SHARED && v->prot & PROT_WRITE) {
+      map_file_off = v->fileoff + (low - vma_low);
+      ip = v->f->ip;
+      // write a few blocks at a time to avoid exceeding
+      // the maximum log transaction size, including
+      // i-node, indirect block, allocation blocks,
+      // and 2 blocks of slop for non-aligned writes.
+      // this really belongs lower down, since writei()
+      // might be writing a device like the console.
+      int max = ((MAXOPBLOCKS - 1 - 1 - 2) / 2) * BSIZE;
+      int i = 0;
+      while (i < n) {
+        //printf("test inf loop wh\n");
+        int n1 = n - i;
+        if (n1 > max)
+          n1 = max;
+        begin_op();
+        ilock(ip);
+        if ((r = writei(ip, 1, low + i, map_file_off, n1)) > 0)
+          map_file_off += r;
+        iunlock(ip);
+        end_op();
+        if(r==0){
+          // ip->size less than spec
+          break;
+        }
+        if (r == -1) {
+          // error from writei
+          ret = -1;
+          break;
+        }
+        i += r;
+      }
+    }
+    if (low == vma_low && high == vma_high) {
+      // unmap whole vma
+      v->addr = 0;
+      fileclose(v->f);
+    } else if (low > vma_low) {
+      // unmap [low -> vma_high], leave [vma_low -> low -1]
+      v->length = low - vma_low;
+    } else if (high < vma_high) {
+      // unmap [vma_low -> high], leave [high -> vma_high]
+      /* bug code!!!! 
+        v->addr = up;
+        v->length += v->addr - up; */
+      v->length += v->addr - high;
+      v->fileoff += high - v->addr;
+      v->addr = high;
+    } else {
+    }
+    uvmunmap(pg, low, (high - low) / PGSIZE, 1);
+    return ret;
+  }
+  return 0;
 }

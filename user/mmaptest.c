@@ -18,6 +18,7 @@ main(int argc, char *argv[])
   mmap_test();
   fork_test();
   printf("mmaptest: all tests succeeded\n");
+
   exit(0);
 }
 
@@ -40,13 +41,13 @@ _v1(char *p)
   for (i = 0; i < PGSIZE*2; i++) {
     if (i < PGSIZE + (PGSIZE/2)) {
       if (p[i] != 'A') {
-        printf("mismatch at %d, wanted 'A', got 0x%x\n", i, p[i]);
+        printf("mismatch at %d, p: %p, wanted 'A', got 0x%x\n", i, (uint64)p + i, p[i]);
         err("v1 mismatch (1)");
       }
     } else {
       if (p[i] != 0) {
         printf("mismatch at %d, wanted zero, got 0x%x\n", i, p[i]);
-        err("v1 mismatch (2)");
+      err("v1 mismatch (2)");
       }
     }
   }
@@ -227,8 +228,13 @@ mmap_test(void)
   close(fd2);
   unlink("mmap2");
 
-  if(memcmp(p1, "12345", 5) != 0)
+  printf("mmaptest fd1: fd: %d\n", fd);
+
+  if(memcmp(p1, "12345", 5) != 0){
+    printf("p1: %p\n", p1);
+    printf("%s\n",p1);
     err("mmap1 mismatch");
+  }
   if(memcmp(p2, "67890", 5) != 0)
     err("mmap2 mismatch");
 
@@ -275,8 +281,11 @@ fork_test(void)
   if((pid = fork()) < 0)
     err("fork");
   if (pid == 0) {
+    // child
     _v1(p1);
+    _v1(p2);
     munmap(p1, PGSIZE); // just the first page
+    printf("child pass\n");
     exit(0); // tell the parent that the mapping looks OK.
   }
 
