@@ -97,14 +97,21 @@
 #define E1000_TXD_STAT_DD    0x00000001 /* Descriptor Done */
 
 // [E1000 3.3.3]
+// uint64 addr; // buffer address (a desc per buf cell).
+// uint16 length; // length per segmant.
+// uint8 cso; // checksum offset in the packet to insert checksum.
+// uint8 cmd; //3.3.3.1 common field for some control bit.
+// uint8 status; //some bit for info of this desc 
+// uint8 css; //checksum start field, where to begin compute
+// uint16 special;
 struct tx_desc
 {
-  uint64 addr;
-  uint16 length;
-  uint8 cso;
-  uint8 cmd;
-  uint8 status;
-  uint8 css;
+  uint64 addr; // buffer address (a desc per buf cell).
+  uint16 length; // length per segmant.
+  uint8 cso; // checksum offset in the packet to insert checksum.
+  uint8 cmd; //3.3.3.1 common field for some control bit.
+  uint8 status; //some bit for info of this desc 
+  uint8 css; //checksum start field, where to begin compute
   uint16 special;
 };
 
@@ -113,6 +120,12 @@ struct tx_desc
 #define E1000_RXD_STAT_EOP      0x02    /* End of Packet */
 
 // [E1000 3.2.3]
+//  uint64 addr;       /* Address of the descriptor's data buffer */
+//  uint16 length;     /* Length of data DMAed into data buffer */
+//  uint16 csum;       /* Packet checksum */
+//  uint8 status;      /* Descriptor status */
+//  uint8 errors;      /* Descriptor Errors */
+//  uint16 special;
 struct rx_desc
 {
   uint64 addr;       /* Address of the descriptor's data buffer */
